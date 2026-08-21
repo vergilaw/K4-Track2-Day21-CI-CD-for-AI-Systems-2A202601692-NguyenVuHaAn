@@ -59,28 +59,92 @@ jobs:
       - name: Authenticate to S3
         env:
           CREDS: ${{ secrets.STORAGE_CREDENTIALS }}
+          ARTIFACT_BUCKET: ${{ secrets.ARTIFACT_BUCKET }}
         run: |
           python - <<'PYEOF'
-          import os, json
-          creds_raw = os.environ.get("CREDS", "").strip()
+          import csv, io, json, os, sys
+
+          # Actions renders a populated secret as "***"; an empty value here means the
+          # secret does not exist in the repo, not that the content is unparseable.
+          raw = os.environ.get("CREDS", "").lstrip("﻿").strip()
+          if not raw:
+              sys.exit(
+                  "ERROR: secret STORAGE_CREDENTIALS is not set (or is empty).\n"
+                  "  Add it under Settings > Secrets and variables > Actions > New repository secret\n"
+                  "    Name:  STORAGE_CREDENTIALS\n"
+                  '    Value: {"aws_access_key_id": "AKIA...", "aws_secret_access_key": "..."}\n'
+                  "           (or paste the whole accessKeys.csv from the IAM console verbatim)"
+              )
+
+          AK_KEYS = ("aws_access_key_id", "access key id", "accesskeyid")
+          SK_KEYS = ("aws_secret_access_key", "secret access key", "secretaccesskey")
+
+          def pick(mapping, wanted):
+              for key, value in mapping.items():
+                  if key and str(key).lstrip("﻿").strip().lower() in wanted and value:
+                      return str(value).strip()
+              return ""
+
           ak = sk = ""
+
+          # Format 1 - JSON object.
           try:
-              data = json.loads(creds_raw)
-              ak = data.get("AWS_ACCESS_KEY_ID") or data.get("aws_access_key_id") or data.get("Access key ID")
-              sk = data.get("AWS_SECRET_ACCESS_KEY") or data.get("aws_secret_access_key") or data.get("Secret access key")
-          except Exception:
-              lines = creds_raw.splitlines()
-              if len(lines) >= 2 and "," in lines[1]:
-                  parts = lines[1].split(",")
-                  if len(parts) >= 2:
-                      ak, sk = parts[0].strip(), parts[1].strip()
-          if not ak or not sk:
-              print("ERROR: Could not parse credentials from STORAGE_CREDENTIALS secret.")
-              exit(1)
+              data = json.loads(raw)
+          except ValueError:
+              data = None
+          if isinstance(data, dict):
+              ak, sk = pick(data, AK_KEYS), pick(data, SK_KEYS)
+
+          # Format 2 - accessKeys.csv as downloaded from the IAM console.
+          if not (ak and sk):
+              try:
+                  rows = list(csv.DictReader(io.StringIO(raw)))
+              except csv.Error:
+                  rows = []
+              if rows:
+                  ak, sk = pick(rows[0], AK_KEYS), pick(rows[0], SK_KEYS)
+
+          # Format 3 - key=value lines / ~/.aws/credentials style.
+          if not (ak and sk):
+              kv = {}
+              for line in raw.splitlines():
+                  if "=" in line and not line.strip().startswith(("[", "#")):
+                      key, _, value = line.partition("=")
+                      kv[key] = value
+              ak, sk = pick(kv, AK_KEYS), pick(kv, SK_KEYS)
+
+          if not (ak and sk):
+              sys.exit(
+                  "ERROR: STORAGE_CREDENTIALS is set but contains no access key pair.\n"
+                  f"  Received {len(raw)} chars over {len(raw.splitlines())} line(s).\n"
+                  "  Expected JSON, accessKeys.csv, or key=value lines."
+              )
+
+          bucket = os.environ.get("ARTIFACT_BUCKET", "").strip()
+          bucket = bucket.removeprefix("s3://").strip("/")
+          if not bucket:
+              sys.exit(
+                  "ERROR: secret ARTIFACT_BUCKET is not set (or is empty).\n"
+                  "  Expected the bare bucket name, e.g. income-lab-nvha-2601692 (no s3:// prefix)."
+              )
+
+          # Values parsed out of a secret are NOT masked automatically - register them
+          # so they cannot surface in the logs of any later step.
+          print(f"::add-mask::{ak}")
+          print(f"::add-mask::{sk}")
+
           with open(os.environ["GITHUB_ENV"], "a") as f:
               f.write(f"AWS_ACCESS_KEY_ID={ak}\n")
               f.write(f"AWS_SECRET_ACCESS_KEY={sk}\n")
               f.write("AWS_DEFAULT_REGION=us-east-1\n")
+              f.write(f"ARTIFACT_BUCKET={bucket}\n")
+
+          if len(ak) != 20 or len(sk) != 40:
+              print(
+                  f"WARNING: unexpected key lengths (id={len(ak)}, secret={len(sk)}); "
+                  "AWS keys are normally 20 and 40 chars - the paste may be truncated."
+              )
+          print(f"OK: credentials parsed, target bucket {bucket}")
           PYEOF
 
       - name: Pull data with DVC
@@ -96,11 +160,10 @@ jobs:
           echo "f1=$F1" >> $GITHUB_OUTPUT
 
       - name: Upload model to Cloud Storage
-        env:
-          ARTIFACT_BUCKET: ${{ secrets.ARTIFACT_BUCKET }}
         run: |
           python - <<'PYEOF'
           import os, boto3
+          # ARTIFACT_BUCKET comes from the auth step already normalised (no s3:// prefix).
           boto3.client("s3").upload_file(
               "models/model.joblib", os.environ["ARTIFACT_BUCKET"],
               "artifacts/current/model.joblib")
