@@ -60,8 +60,8 @@ jobs:
         env:
           CREDS: ${{ secrets.STORAGE_CREDENTIALS }}
         run: |
-          echo "AWS_ACCESS_KEY_ID=$(jq -r .aws_access_key_id <<<\"$CREDS\")"     >> $GITHUB_ENV
-          echo "AWS_SECRET_ACCESS_KEY=$(jq -r .aws_secret_access_key <<<\"$CREDS\")" >> $GITHUB_ENV
+          echo "AWS_ACCESS_KEY_ID=$(jq -r .AWS_ACCESS_KEY_ID <<<\"$CREDS\")"     >> $GITHUB_ENV
+          echo "AWS_SECRET_ACCESS_KEY=$(jq -r .AWS_SECRET_ACCESS_KEY <<<\"$CREDS\")" >> $GITHUB_ENV
           echo "AWS_DEFAULT_REGION=us-east-1" >> $GITHUB_ENV
 
       - name: Pull data with DVC
