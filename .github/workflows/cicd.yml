@@ -60,9 +60,28 @@ jobs:
         env:
           CREDS: ${{ secrets.STORAGE_CREDENTIALS }}
         run: |
-          echo "AWS_ACCESS_KEY_ID=$(jq -r .AWS_ACCESS_KEY_ID <<<\"$CREDS\")"     >> $GITHUB_ENV
-          echo "AWS_SECRET_ACCESS_KEY=$(jq -r .AWS_SECRET_ACCESS_KEY <<<\"$CREDS\")" >> $GITHUB_ENV
-          echo "AWS_DEFAULT_REGION=us-east-1" >> $GITHUB_ENV
+          python - <<'PYEOF'
+          import os, json
+          creds_raw = os.environ.get("CREDS", "").strip()
+          ak = sk = ""
+          try:
+              data = json.loads(creds_raw)
+              ak = data.get("AWS_ACCESS_KEY_ID") or data.get("aws_access_key_id") or data.get("Access key ID")
+              sk = data.get("AWS_SECRET_ACCESS_KEY") or data.get("aws_secret_access_key") or data.get("Secret access key")
+          except Exception:
+              lines = creds_raw.splitlines()
+              if len(lines) >= 2 and "," in lines[1]:
+                  parts = lines[1].split(",")
+                  if len(parts) >= 2:
+                      ak, sk = parts[0].strip(), parts[1].strip()
+          if not ak or not sk:
+              print("ERROR: Could not parse credentials from STORAGE_CREDENTIALS secret.")
+              exit(1)
+          with open(os.environ["GITHUB_ENV"], "a") as f:
+              f.write(f"AWS_ACCESS_KEY_ID={ak}\n")
+              f.write(f"AWS_SECRET_ACCESS_KEY={sk}\n")
+              f.write("AWS_DEFAULT_REGION=us-east-1\n")
+          PYEOF
 
       - name: Pull data with DVC
         run: dvc pull data/train_batch1.csv.dvc data/holdout.csv.dvc
