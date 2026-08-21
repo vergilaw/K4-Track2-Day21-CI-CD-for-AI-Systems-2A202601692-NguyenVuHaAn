@@ -1,103 +1,61 @@
 # Báo Cáo Lab Day 21 - CI/CD cho AI Systems
 
-<!--
-HƯỚNG DẪN - đọc rồi XÓA TOÀN BỘ các khối chú thích này sau khi điền xong:
-
-  - Giới hạn: KHÔNG QUÁ 1 TRANG A4, tương đương khoảng 450 - 550 từ nội dung.
-  - Chỉ điền vào các chỗ ___ và các ô trong bảng. Không thêm mục mới.
-  - Viết bằng câu hoàn chỉnh, không gạch đầu dòng cụt lủn.
-  - Kiểm tra độ dài sau khi đã xóa hết chú thích:
-        wc -w nop-bai/bao-cao.md
-    và xem trước bản in bằng cách mở file trên GitHub rồi Ctrl+P / Cmd+P.
--->
-
 | | |
 |---|---|
-| Họ và tên | ___ |
-| MSSV | ___ |
+| Họ và tên | Nguyễn Vũ Hà An |
+| MSSV | 2A202601692 |
 | Lớp / Khóa | K4 |
-| Repo GitHub | https://github.com/___/___ |
-| Ngày nộp | ___ |
+| Repo GitHub | https://github.com/vergilaw/K4-Track2-Day21-CI-CD-for-AI-Systems-2A202601692-NguyenVuHaAn |
+| Ngày nộp | 21/08/2026 |
 
 ---
 
 ## 1. Bộ Siêu Tham Số Đã Chọn và Lý Do
 
-<!-- Khoảng 120 - 150 từ. Điền kết quả thật từ MLflow UI ở Bước 1, tối thiểu 3 lần chạy. -->
-
 | Lần chạy | n_estimators | learning_rate | max_depth | f1_score | accuracy |
 |---|---|---|---|---|---|
-| 1 | ___ | ___ | ___ | ___ | ___ |
-| 2 | ___ | ___ | ___ | ___ | ___ |
-| 3 | ___ | ___ | ___ | ___ | ___ |
+| 1 | 100 | 0.1 | 3 | 0.672 | 0.865 |
+| 2 | 50 | 0.05 | 2 | 0.590 | 0.840 |
+| 3 | 200 | 0.1 | 5 | 0.691 | 0.871 |
 
-**Bộ siêu tham số đã chọn:** `n_estimators=___`, `learning_rate=___`, `max_depth=___`.
+**Bộ siêu tham số đã chọn:** `n_estimators=200`, `learning_rate=0.1`, `max_depth=5`.
 
-**Lý do:** ___
-
-<!--
-Trả lời trong phần Lý do:
-  - Vì sao bộ này tốt hơn các bộ còn lại (dựa trên f1_score, không phải accuracy)?
-  - Lần chạy có accuracy cao nhất có trùng với lần có f1_score cao nhất không?
-    Nếu không, điều đó nói lên điều gì?
-  - Bạn quan sát thấy đánh đổi nào giữa n_estimators và learning_rate?
--->
+**Lý do:** Bộ siêu tham số này đạt điểm f1_score cao nhất (0.691) so với các bộ còn lại. Mặc dù lần chạy này cũng có accuracy cao nhất, nhưng sự chênh lệch f1_score giữa lần chạy 2 và 3 là rất lớn (0.590 vs 0.691) trong khi accuracy gần như không đổi (0.840 vs 0.871). Điều này cho thấy f1_score nhạy cảm và phản ánh đúng chất lượng học của mô hình hơn. Tôi cũng nhận thấy sự đánh đổi: tăng n_estimators và max_depth giúp mô hình học các mẫu phức tạp hơn, nhưng đánh đổi bằng thời gian huấn luyện lâu hơn và nguy cơ overfit nếu learning_rate quá cao.
 
 ---
 
 ## 2. Vì Sao Ngưỡng Chất Lượng Đặt Trên F1 Chứ Không Phải Accuracy
 
-<!-- Khoảng 120 - 150 từ. -->
+Tập dữ liệu Adult Income có sự mất cân bằng lớp đáng kể, với tỷ lệ lớp "thu nhập <= 50K" chiếm đến 75% và lớp "thu nhập > 50K" chỉ chiếm 25%. Do đó, nếu một mô hình cực kỳ tệ chỉ luôn đoán bừa là "thu nhập thấp" cho mọi mẫu, nó vẫn sẽ đạt độ chính xác (accuracy) là 75%. Con số này gây hiểu lầm nghiêm trọng về chất lượng thực sự của mô hình. 
 
-___
-
-<!--
-Cần nêu được:
-  - Phân bố lớp của tập dữ liệu (tỷ lệ lớp thu nhập > 50K) và hệ quả của nó.
-  - Accuracy của một mô hình luôn trả lời "thu nhập thấp" là bao nhiêu, vì sao con số
-    đó gây hiểu nhầm.
-  - F1 của lớp dương đo điều gì mà accuracy không đo được.
-  - Vì sao KHÔNG dùng average="weighted" hay average="macro" khi gọi f1_score.
--->
+Thay vào đó, f1_score (cho lớp dương) đo lường sự cân bằng giữa độ chuẩn xác (Precision) và độ bao phủ (Recall), bắt buộc mô hình phải thực sự dự đoán đúng người có thu nhập cao thì điểm mới tăng. Việc KHÔNG dùng `average="weighted"` là để ngăn lớp đa số (thu nhập thấp) kéo điểm số lên, giúp hệ thống CI/CD đánh giá khắt khe và chính xác năng lực phát hiện thu nhập cao của mô hình.
 
 ---
 
 ## 3. Khó Khăn Gặp Phải và Cách Giải Quyết
 
-<!-- Nêu 2 - 3 khó khăn thật, mỗi ô một câu ngắn. -->
-
 | Khó khăn | Nguyên nhân | Cách giải quyết |
 |---|---|---|
-| ___ | ___ | ___ |
-| ___ | ___ | ___ |
-| ___ | ___ | ___ |
+| Lệnh curl kiểm tra API trên máy ảo EC2 bị treo mãi không trả kết quả | AWS mặc định chặn tất cả các cổng từ bên ngoài, chỉ mở port 22 | Vào AWS Console, thiết lập Security Group Inbound Rule mở port 8080 cho `0.0.0.0/0` |
+| Quá trình CI/CD báo lỗi parse biến STORAGE_CREDENTIALS | Định dạng file credentials của AWS xuất ra đôi khi chứa ký tự rác (BOM) hoặc thiếu khoảng trắng hợp lệ | Nâng cấp script Python dùng `json.loads` an toàn và `csv.DictReader` loại bỏ BOM-UTF8 |
+| Lệnh `dvc push` bị AccessDenied trên GitHub Actions | Chưa cấp quyền ghi (PutObject) cho IAM User hoặc chưa có quyền ListBucket | Thêm quyền `s3:ListBucket` vào chính sách IAM để DVC kiểm tra file tồn tại |
 
 ---
 
-## 4. So Sánh Bước 2 và Bước 3 (bắt buộc, 2 - 3 câu)
-
-<!-- Lấy số liệu từ bảng ở mục 3.6 của tasks/buoc-3.md. -->
+## 4. So Sánh Bước 2 và Bước 3
 
 | | f1_score | accuracy |
 |---|---|---|
-| Bước 2 (chỉ `train_batch1`) | ___ | ___ |
-| Bước 3 (thêm `train_batch2`) | ___ | ___ |
+| Bước 2 (chỉ `train_batch1`) | 0.691 | 0.871 |
+| Bước 3 (thêm `train_batch2`) | 0.687 | 0.869 |
 
-**Nhận xét:** ___
-
-<!--
-Một câu trả lời trung thực kiểu "f1 giảm 0,01 vì dữ liệu mới cùng phân phối, không mang
-thêm thông tin mới" được đánh giá cao hơn kết luận sai rằng thêm dữ liệu luôn tốt hơn.
--->
+**Nhận xét:** f1_score giảm nhẹ đi khoảng 0.004 khi thêm batch 2 vào tập huấn luyện. Điều này hợp lý và phản ánh đúng bản chất vì dữ liệu batch 2 được cắt từ cùng một tập gốc (cùng phân phối) so với batch 1, nên việc thêm dữ liệu chỉ đơn thuần tăng số lượng mẫu chứ không mang lại thông tin hay dạng phân phối mới, đôi khi còn thêm nhiễu khiến điểm số giảm nhẹ. Thêm dữ liệu không phải lúc nào cũng làm mô hình tốt lên.
 
 ---
 
-## 5. Phần Bonus Đã Thực Hiện (nếu có)
+## 5. Phần Bonus Đã Thực Hiện
 
-<!-- Xóa cả mục 5 nếu không làm bonus. Mỗi bonus tối đa 1 dòng. -->
-
-- [ ] Bonus 1 - Tracking MLflow từ xa với DagsHub: ___
-- [ ] Bonus 2 - Điều chỉnh ngưỡng quyết định: ___
-- [ ] Bonus 3 - Báo cáo precision / recall tự động: ___
-- [ ] Bonus 4 - Hoàn trả về phiên bản trước: ___
-- [ ] Bonus 5 - Cảnh báo lệch lạc dữ liệu: ___
+- [x] Bonus 1 - Tracking MLflow từ xa với DagsHub: Đã khai báo 3 biến môi trường để gửi lịch sử huấn luyện từ Actions sang DagsHub (ảnh 06).
+- [x] Bonus 3 - Báo cáo precision / recall tự động: Ghi thêm classification_report và confusion_matrix ra file detail.txt để CI lưu artifact.
+- [x] Bonus 5 - Cảnh báo lệch lạc dữ liệu: Đã thêm logic kiểm tra độ lệch phân phối trung bình đặc trưng Age (tuổi) giữa tập Train và Eval.
+- [x] Thêm: Đã tạo nhánh phụ cố tình dùng tham số kém để chứng minh Quality Gate chặn Release thành công (ảnh 07).
