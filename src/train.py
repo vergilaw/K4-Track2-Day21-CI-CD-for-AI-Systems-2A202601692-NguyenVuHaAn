@@ -6,7 +6,7 @@ import json
 import joblib
 import os
 from sklearn.ensemble import GradientBoostingClassifier
-from sklearn.metrics import accuracy_score, f1_score
+from sklearn.metrics import accuracy_score, f1_score, classification_report, confusion_matrix
 
 # Nguong chat luong cua lab nay la f1_score, KHONG phai accuracy.
 # Ly do: bo du lieu Adult co ty le lop 75/25. Mot mo hinh doan bua
@@ -41,6 +41,13 @@ def train(
     X_eval  = df_eval.drop(columns=["target"])
     y_eval  = df_eval["target"]
 
+    # BONUS 5: Canh bao Data Drift co ban (Kiem tra lech phan phoi tuoi)
+    age_mean_train = X_train["age"].mean()
+    age_mean_eval = X_eval["age"].mean()
+    age_drift = abs(age_mean_train - age_mean_eval)
+    if age_drift > 2.0:
+        print(f"WARNING: Data Drift phat hien tren dac trung 'age'! (Lech {age_drift:.2f} tuoi)")
+
     with mlflow.start_run():
 
         # TODO 3: Ghi nhan cac sieu tham so
@@ -58,6 +65,7 @@ def train(
         # TODO 6: Ghi nhan chi so vao MLflow
         mlflow.log_metric("f1_score", float(f1))
         mlflow.log_metric("accuracy", float(acc))
+        mlflow.log_metric("age_drift", float(age_drift))
         mlflow.sklearn.log_model(model, "model")
 
         # TODO 7: In ket qua ra man hinh
@@ -67,6 +75,13 @@ def train(
         os.makedirs("outputs", exist_ok=True)
         with open("outputs/report.json", "w") as f:
             json.dump({"f1_score": float(f1), "accuracy": float(acc)}, f)
+
+        # BONUS 3: Luu Precision/Recall, Confusion Matrix ra detail.txt
+        with open("outputs/detail.txt", "w") as f:
+            f.write("=== CLASSIFICATION REPORT ===\n")
+            f.write(classification_report(y_eval, preds))
+            f.write("\n\n=== CONFUSION MATRIX ===\n")
+            f.write(str(confusion_matrix(y_eval, preds)))
 
         # TODO 9: Luu mo hinh ra file models/model.joblib
         os.makedirs("models", exist_ok=True)
