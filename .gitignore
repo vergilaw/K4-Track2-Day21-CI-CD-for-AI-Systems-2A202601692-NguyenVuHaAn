@@ -12,3 +12,10 @@ __pycache__/
 *.pyc
 .DS_Store
 mlruns/
+*.csv
+*.pem
+*.ps1
+*.md
+!README.md
+!awspath.md
+!hihi.md
